@@ -28,6 +28,11 @@
       color: gray;
     }
 
+    .list-group-item.expired {
+      border-left: 5px solid red;
+      background-color: #3a1a1a;
+    }
+
     .form-control, .form-select, .btn {
       background-color: #2c2c2c;
       color: white;
@@ -43,6 +48,22 @@
       0%   { transform: scale(0.5); opacity: 0; }
       50%  { transform: scale(1.5); opacity: 1; }
       100% { transform: scale(1); opacity: 1; }
+    }
+    
+    .task-text {
+      flex-grow: 1;
+    }
+    
+    .due-date {
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-left: 10px;
+      margin-right: 10px;
+    }
+    
+    .expired .due-date {
+      color: #ff6b6b;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -62,6 +83,7 @@
 
       <div class="input-group mb-3">
         <input type="text" id="taskInput" class="form-control" placeholder="Digite uma tarefa...">
+        <input type="date" id="dueDateInput" class="form-control" placeholder="Data de validade">
         <button class="btn btn-primary" onclick="addTask()">Adicionar</button>
       </div>
 
@@ -70,6 +92,7 @@
           <option value="all">Todas</option>
           <option value="done">Concluídas</option>
           <option value="pending">Pendentes</option>
+          <option value="expired">Vencidas</option>
         </select>
       </div>
 
@@ -80,49 +103,123 @@
   </div>
 
   <script>
-    function addTask() {
-      const input = document.getElementById('taskInput');
-      const taskText = input.value.trim();
-      if (!taskText) return;
 
-      const li = document.createElement('li');
-      li.className = 'list-group-item';
+    let tasks = [];
 
-      const span = document.createElement('span');
-      span.textContent = taskText;
+  
+    function saveTasks() {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    }
 
-      const controls = document.createElement('div');
 
-      const completeBtn = document.createElement('button');
-      completeBtn.className = 'btn btn-success btn-sm me-1';
-      completeBtn.textContent = '✓';
-      completeBtn.onclick = () => toggleDone(li);
+    function loadTasks() {
+      const savedTasks = localStorage.getItem('tasks');
+      if (savedTasks) {
+        tasks = JSON.parse(savedTasks);
+        renderTasks();
+      }
+    }
 
-      const deleteBtn = document.createElement('button');
-      deleteBtn.className = 'btn btn-danger btn-sm';
-      deleteBtn.textContent = '🗑';
-      deleteBtn.onclick = () => li.remove();
 
-      controls.appendChild(completeBtn);
-      controls.appendChild(deleteBtn);
+    function renderTasks() {
+      const taskList = document.getElementById('taskList');
+      taskList.innerHTML = '';
+      
+      tasks.forEach((task, index) => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item';
+        if (task.done) li.classList.add('done');
+        
+        const taskContent = document.createElement('div');
+        taskContent.className = 'd-flex align-items-center task-text';
+        
+        const span = document.createElement('span');
+        span.textContent = task.text;
+        
+        const dueDateSpan = document.createElement('span');
+        dueDateSpan.className = 'due-date';
+        
+        if (task.dueDate) {
+          const formattedDate = new Date(task.dueDate).toLocaleDateString('pt-BR');
+          dueDateSpan.textContent = `⏳ ${formattedDate}`;
+          
+          // Verifica se a tarefa está vencida
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const taskDueDate = new Date(task.dueDate);
+          
+          if (taskDueDate < today && !task.done) {
+            li.classList.add('expired');
+          }
+        }
+        
+        taskContent.appendChild(span);
+        taskContent.appendChild(dueDateSpan);
 
-      li.appendChild(span);
-      li.appendChild(controls);
+        const controls = document.createElement('div');
 
-      document.getElementById('taskList').appendChild(li);
-      input.value = "";
+        const completeBtn = document.createElement('button');
+        completeBtn.className = 'btn btn-success btn-sm me-1';
+        completeBtn.textContent = '✓';
+        completeBtn.onclick = () => toggleDone(index);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn btn-danger btn-sm';
+        deleteBtn.textContent = '🗑';
+        deleteBtn.onclick = () => deleteTask(index);
+
+        controls.appendChild(completeBtn);
+        controls.appendChild(deleteBtn);
+
+        li.appendChild(taskContent);
+        li.appendChild(controls);
+
+        taskList.appendChild(li);
+      });
+      
       filterTasks();
     }
 
-    function toggleDone(li) {
-      li.classList.toggle('done');
+    function addTask() {
+      const input = document.getElementById('taskInput');
+      const dueDateInput = document.getElementById('dueDateInput');
+      const taskText = input.value.trim();
+      const dueDate = dueDateInput.value;
+      
+      if (!taskText) return;
+
+
+      tasks.push({
+        text: taskText,
+        dueDate: dueDate,
+        done: false
+      });
+      
+ 
+      saveTasks();
+      renderTasks();
+      input.value = "";
+      dueDateInput.value = "";
+    }
+
+    function toggleDone(index) {
+      // Alterna o status da tarefa
+      tasks[index].done = !tasks[index].done;
+      
+      // Salva 
+      saveTasks();
+      
+      // Renderiza 
+      renderTasks();
+      
+      // Mostra o emoji
       const emojiBox = document.getElementById('emojiBox');
       emojiBox.innerHTML = '';
 
       const emoji = document.createElement('div');
       emoji.className = 'animated-emoji';
 
-      if (li.classList.contains('done')) {
+      if (tasks[index].done) {
         emoji.textContent = '🎉 Tarefa concluída!';
       } else {
         emoji.textContent = '😢 Tarefa pendente!';
@@ -130,24 +227,45 @@
 
       emojiBox.appendChild(emoji);
       setTimeout(() => emojiBox.innerHTML = '', 2000);
-      filterTasks();
+    }
+
+    function deleteTask(index) {
+      // Remove a tarefa
+      tasks.splice(index, 1);
+      
+      // Salv local Storage
+      saveTasks();
+      
+      // Renderiza a tarefas
+      renderTasks();
     }
 
     function filterTasks() {
       const filter = document.getElementById('filter').value;
-      const tasks = document.querySelectorAll('#taskList li');
+      const taskItems = document.querySelectorAll('#taskList li');
 
-      tasks.forEach(task => {
-        const isDone = task.classList.contains('done');
-        if (
-          filter === 'all' ||
-          (filter === 'done' && isDone) ||
-          (filter === 'pending' && !isDone)
-        ) {
-          task.style.display = '';
-        } else {
-          task.style.display = 'none';
+      taskItems.forEach((item, index) => {
+        const isDone = tasks[index].done;
+        const isExpired = item.classList.contains('expired');
+        
+        let shouldShow = false;
+        
+        switch(filter) {
+          case 'all':
+            shouldShow = true;
+            break;
+          case 'done':
+            shouldShow = isDone;
+            break;
+          case 'pending':
+            shouldShow = !isDone;
+            break;
+          case 'expired':
+            shouldShow = isExpired;
+            break;
         }
+        
+        item.style.display = shouldShow ? '' : 'none';
       });
     }
 
@@ -177,12 +295,19 @@
       }
     }
 
-    // Inicializa data com o horário atual
+
     window.onload = () => {
       const now = new Date();
       const localDateTime = now.toISOString().slice(0,16);
       document.getElementById('manualDate').value = localDateTime;
       updateDateManual();
+      
+    
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('dueDateInput').min = today;
+      
+
+      loadTasks();
     };
   </script>
 </body>
